@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Dashboard — Heritage CRPS</title>
+<link rel="stylesheet" href="/frontend/css/style.css">
+</head>
+<body>
+
+<div class="registrar-bar"><span>HERITAGE POLYTECHNIC</span><span>2025/2026 SESSION</span></div>
+<div class="topbar">
+  <div class="brand">
+    <div class="crest">HP</div>
+    <div><h1>Course Registration &amp; Result Processing</h1><small>Student Portal</small></div>
+  </div>
+  <div class="who">
+    <strong id="whoName">—</strong><br>
+    <span id="whoMeta"></span>
+    <button class="logout" onclick="Auth.logout()">Log out</button>
+  </div>
+</div>
+
+<div class="shell">
+  <div id="alertBox"></div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Register Courses</h2>
+      <div class="grid cols-2">
+        <div>
+          <label for="session">Session</label>
+          <input id="session" value="2025/2026">
+        </div>
+        <div>
+          <label for="semester">Semester</label>
+          <select id="semester"><option>First</option><option>Second</option></select>
+        </div>
+      </div>
+      <button class="secondary" onclick="loadAvailableCourses()">Load Available Courses</button>
+      <div id="courseChecklist" style="margin-top:16px;"></div>
+      <p id="unitTally" style="font-size:13px; color:var(--ink-soft);"></p>
+      <button class="primary" onclick="submitRegistration()" style="margin-top:8px;">Submit Registration</button>
+    </div>
+
+    <div class="card">
+      <h2>Registration History</h2>
+      <div id="regHistory"><p class="empty">No registrations yet.</p></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>My Results</h2>
+    <div class="grid cols-2" style="margin-bottom: 6px;">
+      <div>
+        <label for="resSession">Session</label>
+        <input id="resSession" value="2025/2026">
+      </div>
+      <div>
+        <label for="resSemester">Semester</label>
+        <select id="resSemester"><option>First</option><option>Second</option></select>
+      </div>
+    </div>
+    <button class="secondary" onclick="loadResults()">View Results</button>
+    <div class="grid cols-3" style="margin-top:16px;">
+      <div class="gpa-tile" style="grid-column: span 1;">
+        <div class="num" id="gpaValue">—</div>
+        <div class="lbl">GPA this semester</div>
+      </div>
+      <div style="grid-column: span 2;">
+        <div id="resultsTable"><p class="empty">No results loaded yet.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/frontend/js/api.js"></script>
+<script>
+const user = Auth.requireRole('student');
+document.getElementById('whoName').textContent = user.fullName;
+document.getElementById('whoMeta').textContent = `${user.regNo} · ${user.department} · ${user.level}`;
+
+let selectedCourses = new Map(); // id -> {code, units}
+
+function showAlert(msg, type = 'err') {
+  document.getElementById('alertBox').innerHTML = `<div class="alert ${type}">${msg}</div>`;
+}
+
+async function loadAvailableCourses() {
+  const semester = document.getElementById('semester').value;
+  try {
+    const courses = await apiRequest(`/courses?level=${user.level}&semester=${semester}&department=${encodeURIComponent(user.department)}`);
+    const box = document.getElementById('courseChecklist');
+    if (!courses.length) { box.innerHTML = '<p class="empty">No courses found for your level/semester.</p>'; return; }
+
+    box.innerHTML = courses.map(c => `
+      <label style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:13.5px;">
+        <input type="checkbox" style="width:auto; margin:0;" value="${c._id}" data-units="${c.units}" data-code="${c.code}"
+               onchange="toggleCourse(this)">
+        ${c.code} — ${c.title} (${c.units} units)
+      </label>
+    `).join('');
+  } catch (err) { showAlert(err.message); }
+}
+
+function toggleCourse(cb) {
+  if (cb.checked) selectedCourses.set(cb.value, { units: Number(cb.dataset.units) });
+  else selectedCourses.delete(cb.value);
+
+  const total = [...selectedCourses.values()].reduce((s, c) => s + c.units, 0);
+  document.getElementById('unitTally').textContent = `Selected units: ${total} / 24 max`;
+}
+
+async function submitRegistration() {
+  if (selectedCourses.size === 0) return showAlert('Select at least one course.');
+  try {
+    const data = await apiRequest('/registrations', {
+      method: 'POST',
+      body: {
+        session: document.getElementById('session').value,
+        semester: document.getElementById('semester').value,
+        courseIds: [...selectedCourses.keys()]
+      }
+    });
+    showAlert('Registration submitted — pending approval.', 'ok');
+    selectedCourses.clear();
+    loadRegistrationHistory();
+  } catch (err) { showAlert(err.message); }
+}
+
+async function loadRegistrationHistory() {
+  try {
+    const regs = await apiRequest('/registrations/me');
+    const box = document.getElementById('regHistory');
+    if (!regs.length) { box.innerHTML = '<p class="empty">No registrations yet.</p>'; return; }
+    box.innerHTML = `<table><thead><tr><th>Session</th><th>Semester</th><th>Units</th><th>Status</th></tr></thead><tbody>
+      ${regs.map(r => `<tr><td>${r.session}</td><td>${r.semester}</td><td>${r.totalUnits}</td>
+        <td><span class="badge ${r.status === 'approved' ? 'ok' : r.status === 'rejected' ? 'err' : 'pending'}">${r.status}</span></td></tr>`).join('')}
+    </tbody></table>`;
+  } catch (err) { showAlert(err.message); }
+}
+
+async function loadResults() {
+  const session = document.getElementById('resSession').value;
+  const semester = document.getElementById('resSemester').value;
+  try {
+    const data = await apiRequest(`/results/me?session=${encodeURIComponent(session)}&semester=${semester}`);
+    document.getElementById('gpaValue').textContent = data.gpa ?? '—';
+    const box = document.getElementById('resultsTable');
+    if (!data.results.length) { box.innerHTML = '<p class="empty">No published results yet.</p>'; return; }
+    box.innerHTML = `<table><thead><tr><th>Course</th><th>Score</th><th>Grade</th></tr></thead><tbody>
+      ${data.results.map(r => `<tr><td>${r.course.code}</td><td>${r.totalScore}</td><td>${r.grade}</td></tr>`).join('')}
+    </tbody></table>`;
+  } catch (err) { showAlert(err.message); }
+}
+
+loadRegistrationHistory();
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — Heritage CRPS</title>
+<link rel="stylesheet" href="/frontend/css/style.css">
+</head>
+<body>
+
+<div class="registrar-bar"><span>HERITAGE POLYTECHNIC</span><span>REGISTRAR CONSOLE</span></div>
+<div class="topbar">
+  <div class="brand">
+    <div class="crest">HP</div>
+    <div><h1>Course Registration &amp; Result Processing</h1><small>Admin Portal</small></div>
+  </div>
+  <div class="who">
+    <strong id="whoName">—</strong>
+    <button class="logout" onclick="Auth.logout()">Log out</button>
+  </div>
+</div>
+
+<div class="shell">
+  <div id="alertBox"></div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Create Course</h2>
+      <label for="cCode">Course Code</label><input id="cCode" placeholder="CSC201">
+      <label for="cTitle">Title</label><input id="cTitle" placeholder="Data Structures">
+      <div class="grid cols-2">
+        <div><label for="cUnits">Units</label><input id="cUnits" type="number" min="1" max="6"></div>
+        <div><label for="cDept">Department</label><input id="cDept" placeholder="Computer Science"></div>
+      </div>
+      <div class="grid cols-2">
+        <div><label for="cLevel">Level</label>
+          <select id="cLevel"><option>ND1</option><option>ND2</option><option>HND1</option><option>HND2</option></select>
+        </div>
+        <div><label for="cSemester">Semester</label>
+          <select id="cSemester"><option>First</option><option>Second</option></select>
+        </div>
+      </div>
+      <button class="primary" onclick="createCourse()">Create Course</button>
+    </div>
+
+    <div class="card">
+      <h2>Create Lecturer Account</h2>
+      <label for="lName">Full Name</label><input id="lName">
+      <label for="lEmail">Email</label><input id="lEmail" type="email">
+      <div class="grid cols-2">
+        <div><label for="lStaffId">Staff ID</label><input id="lStaffId" placeholder="STF-014"></div>
+        <div><label for="lDept">Department</label><input id="lDept"></div>
+      </div>
+      <label for="lPassword">Temporary Password</label><input id="lPassword" type="password">
+      <button class="primary" onclick="createLecturer()">Create Lecturer</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>All Courses</h2>
+    <div id="courseTable"><p class="empty">Loading…</p></div>
+  </div>
+
+  <div class="card">
+    <h2>Pending Registrations</h2>
+    <div id="regTable"><p class="empty">Loading…</p></div>
+  </div>
+
+  <div class="card">
+    <h2>Publish Results</h2>
+    <label for="pubCourseId">Select a course to review results</label>
+    <select id="pubCourseId" onchange="loadResultsForCourse()"><option value="">— choose —</option></select>
+    <div id="resultsTable" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<script src="/frontend/js/api.js"></script>
+<script>
+const user = Auth.requireRole('admin');
+document.getElementById('whoName').textContent = user.fullName;
+
+function showAlert(msg, type = 'err') {
+  document.getElementById('alertBox').innerHTML = `<div class="alert ${type}">${msg}</div>`;
+  window.scrollTo(0, 0);
+}
+
+let allCourses = [];
+let lecturers = [];
+
+async function loadCourses() {
+  try {
+    allCourses = await apiRequest('/courses');
+    lecturers = await apiRequest('/admin/users?role=lecturer');
+
+    const box = document.getElementById('courseTable');
+    box.innerHTML = allCourses.length ? `<table><thead><tr><th>Code</th><th>Title</th><th>Units</th><th>Level/Sem</th><th>Lecturer</th></tr></thead><tbody>
+      ${allCourses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.units}</td><td>${c.level} / ${c.semester}</td>
+        <td>
+          <select onchange="assignLecturer('${c._id}', this.value)" style="margin:0;">
+            <option value="">— unassigned —</option>
+            ${lecturers.map(l => `<option value="${l._id}" ${c.lecturer && c.lecturer._id === l._id ? 'selected' : ''}>${l.fullName}</option>`).join('')}
+          </select>
+        </td></tr>`).join('')}
+    </tbody></table>` : '<p class="empty">No courses yet.</p>';
+
+    const pubSelect = document.getElementById('pubCourseId');
+    pubSelect.innerHTML = '<option value="">— choose —</option>' +
+      allCourses.map(c => `<option value="${c._id}">${c.code} — ${c.title}</option>`).join('');
+  } catch (err) { showAlert(err.message); }
+}
+
+async function createCourse() {
+  try {
+    await apiRequest('/courses', {
+      method: 'POST',
+      body: {
+        code: document.getElementById('cCode').value.trim(),
+        title: document.getElementById('cTitle').value.trim(),
+        units: Number(document.getElementById('cUnits').value),
+        department: document.getElementById('cDept').value.trim(),
+        level: document.getElementById('cLevel').value,
+        semester: document.getElementById('cSemester').value
+      }
+    });
+    showAlert('Course created.', 'ok');
+    loadCourses();
+  } catch (err) { showAlert(err.message); }
+}
+
+async function assignLecturer(courseId, lecturerId) {
+  try {
+    await apiRequest(`/courses/${courseId}/assign-lecturer`, { method: 'PUT', body: { lecturerId: lecturerId || null } });
+    showAlert('Lecturer assignment updated.', 'ok');
+  } catch (err) { showAlert(err.message); }
+}
+
+async function createLecturer() {
+  try {
+    await apiRequest('/admin/lecturers', {
+      method: 'POST',
+      body: {
+        fullName: document.getElementById('lName').value.trim(),
+        email: document.getElementById('lEmail').value.trim(),
+        staffId: document.getElementById('lStaffId').value.trim(),
+        department: document.getElementById('lDept').value.trim(),
+        password: document.getElementById('lPassword').value
+      }
+    });
+    showAlert('Lecturer account created.', 'ok');
+    loadCourses();
+  } catch (err) { showAlert(err.message); }
+}
+
+async function loadRegistrations() {
+  try {
+    const regs = await apiRequest('/registrations');
+    const pending = regs.filter(r => r.status === 'pending');
+    const box = document.getElementById('regTable');
+    box.innerHTML = pending.length ? `<table><thead><tr><th>Student</th><th>Session/Sem</th><th>Units</th><th>Courses</th><th></th></tr></thead><tbody>
+      ${pending.map(r => `<tr><td>${r.student.regNo} — ${r.student.fullName}</td><td>${r.session} / ${r.semester}</td><td>${r.totalUnits}</td>
+        <td>${r.courses.map(c => c.code).join(', ')}</td>
+        <td>
+          <button class="secondary" onclick="setRegStatus('${r._id}','approved')">Approve</button>
+          <button class="danger" onclick="setRegStatus('${r._id}','rejected')">Reject</button>
+        </td></tr>`).join('')}
+    </tbody></table>` : '<p class="empty">No pending registrations.</p>';
+  } catch (err) { showAlert(err.message); }
+}
+
+async function setRegStatus(id, status) {
+  try {
+    await apiRequest(`/registrations/${id}/status`, { method: 'PUT', body: { status } });
+    showAlert(`Registration ${status}.`, 'ok');
+    loadRegistrations();
+  } catch (err) { showAlert(err.message); }
+}
+
+async function loadResultsForCourse() {
+  const courseId = document.getElementById('pubCourseId').value;
+  const box = document.getElementById('resultsTable');
+  if (!courseId) { box.innerHTML = ''; return; }
+  try {
+    const results = await apiRequest(`/results/course/${courseId}`);
+    box.innerHTML = results.length ? `<table><thead><tr><th>Reg. No</th><th>Name</th><th>Score</th><th>Grade</th><th>Status</th><th></th></tr></thead><tbody>
+      ${results.map(r => `<tr><td>${r.student.regNo}</td><td>${r.student.fullName}</td><td>${r.totalScore ?? '—'}</td><td>${r.grade ?? '—'}</td>
+        <td><span class="badge ${r.isPublished ? 'ok' : 'pending'}">${r.isPublished ? 'Published' : 'Draft'}</span></td>
+        <td>${r.isPublished ? '' : `<button class="secondary" onclick="publishResult('${r._id}')">Publish</button>`}</td></tr>`).join('')}
+    </tbody></table>` : '<p class="empty">No scores entered for this course yet.</p>';
+  } catch (err) { showAlert(err.message); }
+}
+
+async function publishResult(id) {
+  try {
+    await apiRequest(`/results/${id}/publish`, { method: 'PUT' });
+    showAlert('Result published — visible to the student now.', 'ok');
+    loadResultsForCourse();
+  } catch (err) { showAlert(err.message); }
+}
+
+loadCourses();
+loadRegistrations();
+</script>
+</body>
+</html>
