@@ -21,17 +21,17 @@ const Auth = {
   logout() {
     localStorage.removeItem('crps_token');
     localStorage.removeItem('crps_user');
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
   },
   requireRole(role) {
     const user = this.getUser();
     if (!user || !this.getToken()) {
-      window.location.href = 'login.html';
+      window.location.href = 'index.html';
       return null;
     }
     if (role && user.role !== role) {
       alert('You do not have access to that page.');
-      window.location.href = 'login.html';
+      window.location.href = 'index.html';
       return null;
     }
     return user;
