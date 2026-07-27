@@ -1,10 +1,5 @@
-// ============================================================
-// Shared API helper for all Heritage CRPS frontend pages.
-// Include with: <script src="js/api.js"></script>
-// ============================================================
 
-// CHANGE THIS to your deployed backend URL (see the connection guide).
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://hp-5g1i.onrender.com/api';
 
 const Auth = {
   saveSession(data) {
