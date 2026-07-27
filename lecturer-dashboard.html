@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecturer Dashboard — Heritage CRPS</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="registrar-bar"><span>HERITAGE POLYTECHNIC</span><span>2025/2026 SESSION</span></div>
+<div class="topbar">
+  <div class="brand">
+    <div class="crest">HP</div>
+    <div><h1>Course Registration &amp; Result Processing</h1><small>Lecturer Portal</small></div>
+  </div>
+  <div class="who">
+    <strong id="whoName">—</strong><br>
+    <span id="whoMeta"></span>
+    <button class="logout" onclick="Auth.logout()">Log out</button>
+  </div>
+</div>
+
+<div class="shell">
+  <div id="alertBox"></div>
+
+  <div class="card">
+    <h2>My Assigned Courses</h2>
+    <div id="courseList"><p class="empty">Loading…</p></div>
+  </div>
+
+  <div class="card" id="scoreCard" style="display:none;">
+    <h2>Enter Scores — <span id="activeCourseLabel"></span></h2>
+    <div class="grid cols-2" style="margin-bottom:10px;">
+      <div><label for="session">Session</label><input id="session" value="2025/2026"></div>
+      <div><label for="semester">Semester</label><select id="semester"><option>First</option><option>Second</option></select></div>
+    </div>
+    <div id="studentScoreList"><p class="empty">Select a course above.</p></div>
+  </div>
+</div>
+
+<script src="/api.js"></script>
+<script>
+const user = Auth.requireRole('lecturer');
+document.getElementById('whoName').textContent = user.fullName;
+document.getElementById('whoMeta').textContent = `${user.staffId} · ${user.department}`;
+
+let activeCourse = null;
+
+function showAlert(msg, type = 'err') {
+  document.getElementById('alertBox').innerHTML = `<div class="alert ${type}">${msg}</div>`;
+}
+
+async function loadCourses() {
+  try {
+    const courses = await apiRequest('/courses');
+    const mine = courses.filter(c => c.lecturer && c.lecturer._id === user._id);
+    const box = document.getElementById('courseList');
+    if (!mine.length) { box.innerHTML = '<p class="empty">No courses assigned to you yet. Contact the registrar.</p>'; return; }
+    box.innerHTML = `<table><thead><tr><th>Code</th><th>Title</th><th>Units</th><th>Level</th><th></th></tr></thead><tbody>
+      ${mine.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.units}</td><td>${c.level}</td>
+        <td><button class="secondary" onclick='selectCourse(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Enter Scores</button></td></tr>`).join('')}
+    </tbody></table>`;
+  } catch (err) { showAlert(err.message); }
+}
+
+async function selectCourse(course) {
+  activeCourse = course;
+  document.getElementById('scoreCard').style.display = 'block';
+  document.getElementById('activeCourseLabel').textContent = `${course.code} — ${course.title}`;
+  await loadRegisteredStudents();
+}
+
+async function loadRegisteredStudents() {
+  const session = document.getElementById('session').value;
+  const semester = document.getElementById('semester').value;
+  try {
+    const regs = await apiRequest(`/registrations?courseId=${activeCourse._id}&session=${encodeURIComponent(session)}&semester=${semester}`);
+    const existing = await apiRequest(`/results/course/${activeCourse._id}`);
+    const existingMap = new Map(existing.map(r => [r.student._id, r]));
+
+    const box = document.getElementById('studentScoreList');
+    if (!regs.length) { box.innerHTML = '<p class="empty">No students registered for this course/session yet.</p>'; return; }
+
+    box.innerHTML = `<table><thead><tr><th>Reg. No</th><th>Name</th><th>CA (30)</th><th>Exam (70)</th><th></th></tr></thead><tbody>
+      ${regs.map(r => {
+        const prior = existingMap.get(r.student._id);
+        return `<tr>
+          <td>${r.student.regNo}</td><td>${r.student.fullName}</td>
+          <td><input type="number" min="0" max="30" id="ca-${r.student._id}" value="${prior ? prior.caScore : ''}" style="margin-bottom:0;"></td>
+          <td><input type="number" min="0" max="70" id="exam-${r.student._id}" value="${prior ? prior.examScore : ''}" style="margin-bottom:0;"></td>
+          <td><button class="secondary" onclick="saveScore('${r.student._id}')">Save</button></td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>`;
+  } catch (err) { showAlert(err.message); }
+}
+
+async function saveScore(studentId) {
+  const caScore = Number(document.getElementById(`ca-${studentId}`).value || 0);
+  const examScore = Number(document.getElementById(`exam-${studentId}`).value || 0);
+  try {
+    await apiRequest('/results', {
+      method: 'POST',
+      body: {
+        studentId, courseId: activeCourse._id,
+        session: document.getElementById('session').value,
+        semester: document.getElementById('semester').value,
+        caScore, examScore
+      }
+    });
+    showAlert('Score saved. An admin must publish it before the student can see it.', 'ok');
+  } catch (err) { showAlert(err.message); }
+}
+
+loadCourses();
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heritage CRPS — Create Account</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="auth-card" style="max-width: 460px;">
+    <div class="head">
+      <div class="crest">HP</div>
+      <h1>Create Student Account</h1>
+      <p>HERITAGE POLYTECHNIC</p>
+    </div>
+    <div class="body">
+      <div id="alertBox"></div>
+      <form id="regForm">
+        <label for="fullName">Full Name</label>
+        <input id="fullName" type="text" required>
+
+        <label for="regNo">Registration Number</label>
+        <input id="regNo" type="text" placeholder="HP/2026/CSC/001" required>
+
+        <label for="email">Email</label>
+        <input id="email" type="email" required>
+
+        <div class="grid cols-2">
+          <div>
+            <label for="department">Department</label>
+            <input id="department" type="text" placeholder="Computer Science" required>
+          </div>
+          <div>
+            <label for="level">Level</label>
+            <select id="level" required>
+              <option value="">Select</option>
+              <option>ND1</option><option>ND2</option>
+              <option>HND1</option><option>HND2</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="password">Password</label>
+        <input id="password" type="password" minlength="6" required>
+
+        <button type="submit" class="primary">Create Account</button>
+      </form>
+      <p class="foot">Already registered? <a href="/index.html">Log in</a></p>
+    </div>
+  </div>
+</div>
+
+<script src="/api.js"></script>
+<script>
+document.getElementById('regForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById('alertBox');
+  alertBox.innerHTML = '';
+
+  const body = {
+    fullName: document.getElementById('fullName').value.trim(),
+    regNo: document.getElementById('regNo').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    department: document.getElementById('department').value.trim(),
+    level: document.getElementById('level').value,
+    password: document.getElementById('password').value
+  };
+
+  try {
+    const data = await apiRequest('/auth/register', { method: 'POST', body });
+    Auth.saveSession(data);
+    window.location.href = 'student-dashboard.html';
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert err">${err.message}</div>`;
+  }
+});
+</script>
+</body>
+</html>
