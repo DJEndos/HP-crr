@@ -28,6 +28,8 @@ router.post('/register', async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       regNo: user.regNo,
+      department: user.department,
+      level: user.level,
       role: user.role,
       token: generateToken(user._id, user.role)
     });
