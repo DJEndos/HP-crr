@@ -5,6 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
+const User = require('./models/User');
 
 const authRoutes = require('./routes/authRoutes');
 const courseRoutes = require('./routes/courseRoutes');
@@ -71,7 +72,31 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  // --- TEMPORARY: auto-seed default admin on boot (safe to leave, remove once confirmed) ---
+  try {
+    const email = process.env.ADMIN_EMAIL;
+    const password = process.env.ADMIN_PASSWORD;
+    if (email && password) {
+      const existingAdmin = await User.findOne({ email });
+      if (!existingAdmin) {
+        await User.create({
+          fullName: 'System Administrator',
+          email,
+          password,
+          role: 'admin',
+          staffId: 'ADMIN-001'
+        });
+        console.log('Default admin auto-created on boot:', email);
+      } else {
+        console.log('Default admin already exists, skipping seed:', email);
+      }
+    }
+  } catch (seedErr) {
+    console.error('Auto-seed error:', seedErr.message);
+  }
+  // --- END TEMPORARY BLOCK ---
+
   server.listen(PORT, () => {
     console.log(`Heritage CRPS API running on port ${PORT}`);
   });
