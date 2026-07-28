@@ -59,7 +59,8 @@ async function apiRequest(path, { method = 'GET', body = null } = {}) {
   }
 
   if (!res.ok) {
-    throw new Error(data.message || `Request failed with status ${res.status}`);
+    const detail = data.error ? `: ${data.error}` : '';
+    throw new Error((data.message || `Request failed with status ${res.status}`) + detail);
   }
   return data;
 }
