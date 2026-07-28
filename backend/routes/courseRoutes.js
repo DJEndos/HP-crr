@@ -11,7 +11,10 @@ router.get('/', protect, async (req, res) => {
     const filter = {};
     if (level) filter.level = level;
     if (semester) filter.semester = semester;
-    if (department) filter.department = department;
+    if (department) {
+      const escaped = department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.department = new RegExp(`^${escaped}$`, 'i');
+    }
 
     const courses = await Course.find(filter).populate('lecturer', 'fullName staffId');
     return res.json(courses);
