@@ -4,6 +4,24 @@ const Result = require('../models/Result');
 const Course = require('../models/Course');
 const { protect, authorize } = require('../middleware/auth');
 
+// @route   POST /api/results/repair-legacy
+// @desc    TEMPORARY: re-saves every result so the pre-save hook recomputes
+//          totalScore/grade/gradePoint on records created before the findOneAndUpdate bug was fixed.
+//          Safe to run more than once. Remove this route once confirmed fixed.
+router.post('/repair-legacy', protect, authorize('admin'), async (req, res) => {
+  try {
+    const all = await Result.find({});
+    let fixed = 0;
+    for (const r of all) {
+      await r.save();
+      fixed++;
+    }
+    return res.json({ message: `Recomputed ${fixed} result(s).` });
+  } catch (err) {
+    return res.status(500).json({ message: 'Repair failed', error: err.message });
+  }
+});
+
 // @route   POST /api/results
 // @desc    Lecturer uploads or updates a result for a student in their course
 router.post('/', protect, authorize('lecturer', 'admin'), async (req, res) => {
@@ -22,11 +40,23 @@ router.post('/', protect, authorize('lecturer', 'admin'), async (req, res) => {
       }
     }
 
-    const result = await Result.findOneAndUpdate(
-      { student: studentId, course: courseId, session, semester },
-      { caScore, examScore, uploadedBy: req.user._id },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-    );
+    let result = await Result.findOne({ student: studentId, course: courseId, session, semester });
+    if (result) {
+      result.caScore = caScore;
+      result.examScore = examScore;
+      result.uploadedBy = req.user._id;
+    } else {
+      result = new Result({
+        student: studentId,
+        course: courseId,
+        session,
+        semester,
+        caScore,
+        examScore,
+        uploadedBy: req.user._id
+      });
+    }
+    await result.save();
 
     return res.status(200).json(result);
   } catch (err) {
